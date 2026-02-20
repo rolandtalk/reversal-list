@@ -1,0 +1,319 @@
+"""
+Stock Reversal Point Analysis Web App
+Based on MA3 reversal point detection algorithm
+"""
+
+from flask import Flask, render_template, jsonify, request
+from flask_cors import CORS
+import yfinance as yf
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import os
+import warnings
+warnings.filterwarnings('ignore')
+
+app = Flask(__name__)
+CORS(app)
+
+# File to persist custom symbols
+SYMBOLS_FILE = os.path.join(os.path.dirname(__file__), 'symbols.json')
+
+# Default symbol list
+DEFAULT_SYMBOLS = [
+    "AAPL", "ABBV", "ACHR", "ADBE", "ADSK", "AFRM", "AIG", "ALB", "AMAT", "AMD", "AMZN",
+    "ANET", "APP", "ARKG", "ARKK", "ARKX", "ASML", "ASTS", "AVAV", "AVGO", "BA", "BABA", "BAX",
+    "BNTX", "CCL", "CEG", "COF", "COHR", "COIN", "COST", "CQQQ", "CRM",
+    "CRSP", "CRWD", "CSCO", "CVNA", "CVS", "DE", "DECK", "DELL", "DIS", "DOCU",
+    "EMB", "ENPH", "ERO", "EWZ", "EZU", "FCX", "FLY", "FNGS", "GBTC", "GDRX",
+    "GDX", "GE", "GLD", "GLW", "GOOG", "HIMS", "HOOD", "HUBS", "HWM", "HYG",
+    "IBM", "INDA", "INMD", "INTU", "IONQ", "ISRG", "JD", "JETS", "JPM",
+    "LEMB", "LHX", "LLY", "LQD", "MCHI", "MDT", "META", "MGM", "MP",
+    "MRNA", "MSFT", "MSTR", "NEE", "NET", "NEU", "NFLX", "NOW", "NUGT", "NVDA",
+    "PFE", "PINS", "PL", "PLTR", "PYPL", "QS", "RBLX", "RKLB", "ROBO", "RXRX",
+    "SAP", "SE", "SHOP", "SHY", "SMCI", "SNAP", "SNOW", "SCCO", "SO", "SOFI", "SOUN",
+    "SOXX", "SPOT", "SRAD", "STX", "TDOC", "TEAM", "TEM", "TER", "TJX", "TLRY", "TLT", "TMF",
+    "TMO", "TMV", "TSLA", "TTD", "TWST", "TXN", "U", "UNH", "UPS", "URNM", "V",
+    "WYNN", "XLE", "XLF", "XME", "XOP", "XPEV", "ZM"
+]
+
+def load_symbols():
+    """Load symbols from file or return defaults"""
+    if os.path.exists(SYMBOLS_FILE):
+        try:
+            with open(SYMBOLS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return DEFAULT_SYMBOLS.copy()
+
+def save_symbols(symbols):
+    """Save symbols to file"""
+    with open(SYMBOLS_FILE, 'w') as f:
+        json.dump(sorted(list(set(symbols))), f)
+
+def calculate_rsi(prices, period=14):
+    """Calculate RSI (Relative Strength Index)"""
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calculate_reversal_data(symbol):
+    """Calculate reversal point data for a single symbol"""
+    try:
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="60d")
+        
+        if df.empty or len(df) < 20:
+            return None
+        
+        close_prices = df['Close'].copy()
+        
+        # Calculate MA3
+        ma3 = close_prices.rolling(window=3).mean()
+        
+        # Calculate RSI(14)
+        rsi = calculate_rsi(close_prices, 14)
+        current_rsi = float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else None
+        
+        # Create working dataframe
+        work_df = pd.DataFrame({
+            'Close': close_prices,
+            'MA3': ma3
+        })
+        work_df = work_df.dropna()
+        
+        if len(work_df) < 5:
+            return None
+        
+        # Find segments where Close < MA3
+        work_df['Below_MA3'] = work_df['Close'] < work_df['MA3']
+        
+        # Find continuous segments
+        segments = []
+        in_segment = False
+        start_idx = 0
+        
+        for i in range(len(work_df)):
+            if work_df['Below_MA3'].iloc[i] and not in_segment:
+                in_segment = True
+                start_idx = i
+            elif not work_df['Below_MA3'].iloc[i] and in_segment:
+                in_segment = False
+                segments.append((start_idx, i - 1))
+        
+        if in_segment:
+            segments.append((start_idx, len(work_df) - 1))
+        
+        # Find reversal points (lowest point in each segment)
+        reversal_points = []
+        for start, end in segments:
+            segment = work_df.iloc[start:end + 1]
+            reversal_idx = segment['Close'].idxmin()
+            reversal_points.append(reversal_idx)
+        
+        if not reversal_points:
+            return None
+        
+        # Get the most recent reversal point
+        last_reversal = reversal_points[-1]
+        last_reversal_price = float(work_df.loc[last_reversal, 'Close'])
+        
+        # Current data
+        current_price = float(work_df['Close'].iloc[-1])
+        current_date = work_df.index[-1]
+        
+        # Calculate DG (Days Gone)
+        days_gone = (current_date - last_reversal).days
+        
+        # Calculate GG (Gains Gone)
+        gains_gone = ((current_price - last_reversal_price) / last_reversal_price) * 100
+        
+        # Calculate period gains
+        def calc_period_gain(days):
+            if len(work_df) > days:
+                past_price = float(work_df['Close'].iloc[-days - 1])
+                return ((current_price - past_price) / past_price) * 100
+            return 0.0
+        
+        gain_1d = calc_period_gain(1)
+        gain_3d = calc_period_gain(3)
+        gain_5d = calc_period_gain(5)
+        gain_20d = calc_period_gain(20)
+        
+        return {
+            'sym': symbol,
+            'dg': days_gone,
+            'gg': round(gains_gone, 2),
+            'd1': round(gain_1d, 2),
+            'd3': round(gain_3d, 2),
+            'd5': round(gain_5d, 2),
+            'd20': round(gain_20d, 2),
+            'rsi': round(current_rsi, 1) if current_rsi else None
+        }
+        
+    except Exception as e:
+        print(f"Error processing {symbol}: {e}")
+        return None
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.route('/api/symbols', methods=['GET'])
+def get_symbols():
+    """Get current symbol list"""
+    symbols = load_symbols()
+    return jsonify({'symbols': symbols, 'count': len(symbols)})
+
+
+@app.route('/api/symbols/add', methods=['POST'])
+def add_symbol():
+    """Add a new symbol"""
+    data = request.get_json()
+    symbol = data.get('symbol', '').upper().strip()
+    
+    if not symbol:
+        return jsonify({'error': 'Symbol is required'}), 400
+    
+    # Validate symbol exists
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.history(period="5d")
+        if info.empty:
+            return jsonify({'error': f'Invalid symbol: {symbol}'}), 400
+    except:
+        return jsonify({'error': f'Invalid symbol: {symbol}'}), 400
+    
+    symbols = load_symbols()
+    if symbol in symbols:
+        return jsonify({'error': f'{symbol} already exists'}), 400
+    
+    symbols.append(symbol)
+    save_symbols(symbols)
+    
+    return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols)})
+
+
+@app.route('/api/symbols/remove', methods=['POST'])
+def remove_symbol():
+    """Remove a symbol"""
+    data = request.get_json()
+    symbol = data.get('symbol', '').upper().strip()
+    
+    if not symbol:
+        return jsonify({'error': 'Symbol is required'}), 400
+    
+    symbols = load_symbols()
+    if symbol not in symbols:
+        return jsonify({'error': f'{symbol} not found'}), 404
+    
+    symbols.remove(symbol)
+    save_symbols(symbols)
+    
+    return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols)})
+
+
+@app.route('/api/chart/<symbol>')
+def get_chart_data(symbol):
+    """Get price chart data for a specific symbol"""
+    try:
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="60d")
+        
+        if df.empty:
+            return jsonify({"error": "No data found"}), 404
+        
+        close_prices = df['Close'].copy()
+        ma3 = close_prices.rolling(window=3).mean()
+        
+        work_df = pd.DataFrame({
+            'Close': close_prices,
+            'MA3': ma3
+        })
+        work_df = work_df.dropna()
+        
+        work_df['Below_MA3'] = work_df['Close'] < work_df['MA3']
+        segments = []
+        in_segment = False
+        start_idx = 0
+        
+        for i in range(len(work_df)):
+            if work_df['Below_MA3'].iloc[i] and not in_segment:
+                in_segment = True
+                start_idx = i
+            elif not work_df['Below_MA3'].iloc[i] and in_segment:
+                in_segment = False
+                segments.append((start_idx, i - 1))
+        
+        if in_segment:
+            segments.append((start_idx, len(work_df) - 1))
+        
+        reversal_points = []
+        for start, end in segments:
+            segment = work_df.iloc[start:end + 1]
+            reversal_idx = segment['Close'].idxmin()
+            reversal_points.append({
+                'date': reversal_idx.strftime('%Y-%m-%d'),
+                'price': float(work_df.loc[reversal_idx, 'Close'])
+            })
+        
+        chart_data = {
+            'dates': [d.strftime('%Y-%m-%d') for d in work_df.index],
+            'prices': [float(p) for p in work_df['Close']],
+            'ma3': [float(m) for m in work_df['MA3']],
+            'reversals': reversal_points,
+            'symbol': symbol
+        }
+        
+        return jsonify(chart_data)
+        
+    except Exception as e:
+        print(f"Error getting chart data for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/data')
+def get_data():
+    """Fetch all symbol data concurrently"""
+    print("API /api/data called - starting data fetch...")
+    symbols = load_symbols()
+    results = []
+    
+    try:
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_symbol = {executor.submit(calculate_reversal_data, sym): sym for sym in symbols}
+            
+            for future in as_completed(future_to_symbol):
+                sym = future_to_symbol[future]
+                try:
+                    result = future.result(timeout=30)
+                    if result:
+                        results.append(result)
+                        print(f"✓ {sym}")
+                except Exception as e:
+                    print(f"✗ {sym}: {e}")
+        
+        results.sort(key=lambda x: x['dg'])
+        print(f"Returning {len(results)} results")
+        
+    except Exception as e:
+        print(f"Error in get_data: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+    response = jsonify(results)
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return response
+
+
+if __name__ == '__main__':
+    print(f"Starting server with {len(load_symbols())} symbols...")
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, port=port, host='0.0.0.0')

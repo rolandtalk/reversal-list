@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票反折點分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            display: flex;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            transition: margin-right 0.3s ease;
+            overflow-y: auto;
+            height: 100vh;
+        }
+        
+        .main-content.panel-open { margin-right: 450px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        header { text-align: center; margin-bottom: 30px; }
+        
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle { color: #888; font-size: 1rem; }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        
+        .refresh-btn, .manage-btn {
+            background: linear-gradient(135deg, #00d9ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .manage-btn {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+        
+        .refresh-btn:hover, .manage-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 217, 255, 0.3);
+        }
+        
+        .refresh-btn:disabled, .manage-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .stats { display: flex; gap: 20px; color: #888; }
+        
+        .stat-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 6px;
+        }
+        
+        .stat-value { color: #00d9ff; font-weight: 600; }
+        
+        /* Symbol Management Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal.open { display: flex; }
+        
+        .modal-content {
+            background: linear-gradient(180deg, #1e2a3a 0%, #16213e 100%);
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 1.5rem;
+            color: #00d9ff;
+            font-weight: 700;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        
+        .modal-close:hover { color: #ff4757; }
+        
+        .symbol-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .symbol-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1rem;
+            text-transform: uppercase;
+        }
+        
+        .symbol-input:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        
+        .add-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .add-btn:hover { transform: translateY(-2px); }
+        .add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .symbol-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        
+        .symbol-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0, 217, 255, 0.15);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        
+        .symbol-tag .remove-btn {
+            background: none;
+            border: none;
+            color: #ff4757;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+            line-height: 1;
+        }
+        
+        .symbol-tag .remove-btn:hover { color: #ff6b7a; }
+        
+        .message {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        .message.success { background: rgba(0, 255, 136, 0.2); color: #00ff88; display: block; }
+        .message.error { background: rgba(255, 71, 87, 0.2); color: #ff4757; display: block; }
+        
+        .table-container {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        
+        th {
+            background: rgba(0, 217, 255, 0.1);
+            padding: 14px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #00d9ff;
+            border-bottom: 2px solid rgba(0, 217, 255, 0.3);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s ease;
+            white-space: nowrap;
+            font-size: 0.9rem;
+        }
+        
+        th:hover { background: rgba(0, 217, 255, 0.2); }
+        
+        th .sort-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: 100%;
+        }
+        
+        th .sort-icon { opacity: 0.4; transition: opacity 0.2s ease; }
+        th.sorted .sort-icon { opacity: 1; }
+        th.sorted.asc .sort-icon { transform: rotate(180deg); }
+        
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s ease;
+            font-size: 0.9rem;
+        }
+        
+        tr { cursor: pointer; transition: all 0.2s ease; }
+        tr:hover td { background: rgba(0, 217, 255, 0.1); }
+        tr.selected td { background: rgba(0, 217, 255, 0.15); }
+        
+        .sym-cell {
+            font-weight: 700;
+            color: #00d9ff;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+        
+        .positive { color: #00ff88; }
+        .negative { color: #ff4757; }
+        .neutral { color: #888; }
+        
+        .rsi-high { color: #ff4757; }
+        .rsi-low { color: #00ff88; }
+        .rsi-normal { color: #ffa502; }
+        
+        .loading { text-align: center; padding: 60px; color: #888; }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0, 217, 255, 0.1);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Side Panel */
+        .side-panel {
+            position: fixed;
+            right: -450px;
+            top: 0;
+            width: 450px;
+            height: 100vh;
+            background: linear-gradient(180deg, #1e2a3a 0%, #16213e 100%);
+            box-shadow: -5px 0 30px rgba(0, 0, 0, 0.5);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .side-panel.open { right: 0; }
+        
+        .panel-header {
+            padding: 10px 15px;
+            background: rgba(0, 217, 255, 0.1);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-title { font-size: 1.1rem; font-weight: 700; color: #00d9ff; }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .close-btn:hover { color: #ff4757; background: rgba(255, 71, 87, 0.1); }
+        
+        .panel-content { flex: 1; padding: 10px; overflow-y: auto; }
+        
+        .chart-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .chart-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: #888;
+        }
+        
+        .stock-info {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.8rem;
+        }
+        
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #888; }
+        .info-value { font-weight: 600; }
+        
+        .cnbc-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-top: 6px;
+            padding: 4px 10px;
+            background: linear-gradient(135deg, #004d99, #003366);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .cnbc-btn:hover {
+            background: linear-gradient(135deg, #0066cc, #004d99);
+        }
+        
+        .legend-item { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-size: 0.75rem; color: #aaa; }
+        .legend-color { width: 20px; height: 3px; border-radius: 2px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+        
+        @media (max-width: 900px) {
+            .side-panel { width: 100%; right: -100%; }
+            .main-content.panel-open { margin-right: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-content" id="main-content">
+        <div class="container">
+            <header>
+                <h1>📈 股票反折點分析</h1>
+                <p class="subtitle">基於 MA3 移動平均線的反折點偵測系統 | 點擊股票查看圖表</p>
+            </header>
+            
+            <div class="controls">
+                <div class="btn-group">
+                    <button class="refresh-btn" onclick="fetchData()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                        重新整理
+                    </button>
+                    <button class="manage-btn" onclick="openModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                        管理股票
+                    </button>
+                </div>
+                <div class="stats">
+                    <div class="stat-item">股票數量: <span class="stat-value" id="total-count">-</span></div>
+                    <div class="stat-item">更新時間: <span class="stat-value" id="update-time">-</span></div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="stock-table">
+                    <thead>
+                        <tr>
+                            <th data-column="sym"><span class="sort-btn">SYM <span class="sort-icon">▼</span></span></th>
+                            <th data-column="dg"><span class="sort-btn">DG <span class="sort-icon">▼</span></span></th>
+                            <th data-column="gg"><span class="sort-btn">GG% <span class="sort-icon">▼</span></span></th>
+                            <th data-column="rsi"><span class="sort-btn">RSI <span class="sort-icon">▼</span></span></th>
+                            <th data-column="d1"><span class="sort-btn">1D% <span class="sort-icon">▼</span></span></th>
+                            <th data-column="d3"><span class="sort-btn">3D% <span class="sort-icon">▼</span></span></th>
+                            <th data-column="d5"><span class="sort-btn">5D% <span class="sort-icon">▼</span></span></th>
+                            <th data-column="d20"><span class="sort-btn">20D% <span class="sort-icon">▼</span></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="8" class="loading">
+                                <div class="loading-spinner"></div>
+                                <p>正在載入數據，請稍候...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Symbol Management Modal -->
+    <div class="modal" id="symbol-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-title">管理股票清單</span>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div id="modal-message" class="message"></div>
+            <div class="symbol-input-group">
+                <input type="text" class="symbol-input" id="new-symbol" placeholder="輸入股票代碼 (如: AAPL)" maxlength="10">
+                <button class="add-btn" onclick="addSymbol()">新增</button>
+            </div>
+            <p style="color: #888; margin-bottom: 10px; font-size: 0.9rem;">點擊 × 移除股票</p>
+            <div class="symbol-list" id="symbol-list"></div>
+        </div>
+    </div>
+
+    <!-- Side Panel for Chart -->
+    <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+            <span class="panel-title" id="panel-symbol">-</span>
+            <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div class="panel-content">
+            <div class="chart-container">
+                <div class="chart-loading" id="chart-loading">
+                    <div class="loading-spinner"></div>
+                    <p>載入圖表中...</p>
+                </div>
+                <canvas id="priceChart" style="display: none;"></canvas>
+            </div>
+            
+            <div style="margin-bottom: 6px;">
+                <div class="legend-item"><div class="legend-color" style="background: #00d9ff;"></div><span>收盤價</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: #ff9f43;"></div><span>MA3</span></div>
+                <div class="legend-item"><div class="legend-dot" style="background: #ff4757;"></div><span>反折點</span></div>
+            </div>
+            
+            <div class="stock-info" id="stock-info">
+                <div class="info-row">
+                    <span class="info-label">反折點數量</span>
+                    <span class="info-value" id="info-reversals">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">最近反折點</span>
+                    <span class="info-value" id="info-last-reversal">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">反折點價格</span>
+                    <span class="info-value" id="info-reversal-price">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">當前價格</span>
+                    <span class="info-value" id="info-current-price">-</span>
+                </div>
+            </div>
+            
+            <a href="#" id="cnbc-link" target="_blank" class="cnbc-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                前往 CNBC
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let stockData = [];
+        let symbolList = [];
+        let currentSort = { column: 'dg', direction: 'asc' };
+        let priceChart = null;
+        let selectedSymbol = null;
+
+        function formatValue(value, isPercent = true) {
+            if (value === null || value === undefined) return '-';
+            const num = parseFloat(value);
+            let className = 'neutral';
+            if (num > 0) className = 'positive';
+            else if (num < 0) className = 'negative';
+            const prefix = num > 0 ? '+' : '';
+            const suffix = isPercent ? '%' : '';
+            return `<span class="${className}">${prefix}${num.toFixed(2)}${suffix}</span>`;
+        }
+
+        function formatRSI(value) {
+            if (value === null || value === undefined) return '-';
+            const num = parseFloat(value);
+            let className = 'rsi-normal';
+            if (num >= 70) className = 'rsi-high';
+            else if (num <= 30) className = 'rsi-low';
+            return `<span class="${className}">${num.toFixed(1)}</span>`;
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            
+            if (stockData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="loading"><p>沒有數據</p></td></tr>`;
+                return;
+            }
+            
+            tbody.innerHTML = stockData.map(row => `
+                <tr onclick="showChart('${row.sym}')" class="${selectedSymbol === row.sym ? 'selected' : ''}" data-symbol="${row.sym}">
+                    <td class="sym-cell">${row.sym}</td>
+                    <td>${row.dg}</td>
+                    <td>${formatValue(row.gg)}</td>
+                    <td>${formatRSI(row.rsi)}</td>
+                    <td>${formatValue(row.d1)}</td>
+                    <td>${formatValue(row.d3)}</td>
+                    <td>${formatValue(row.d5)}</td>
+                    <td>${formatValue(row.d20)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function sortData(column) {
+            const headers = document.querySelectorAll('th');
+            headers.forEach(h => h.classList.remove('sorted', 'asc', 'desc'));
+            
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+            
+            const th = document.querySelector(`th[data-column="${column}"]`);
+            th.classList.add('sorted', currentSort.direction);
+            
+            stockData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                
+                if (column === 'sym') {
+                    return currentSort.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+                
+                return currentSort.direction === 'asc' ? valA - valB : valB - valA;
+            });
+            
+            renderTable();
+        }
+
+        async function fetchData() {
+            const btn = document.querySelector('.refresh-btn');
+            const tbody = document.getElementById('table-body');
+            
+            btn.disabled = true;
+            tbody.innerHTML = `<tr><td colspan="8" class="loading"><div class="loading-spinner"></div><p>正在載入數據...</p></td></tr>`;
+            
+            try {
+                const response = await fetch('/api/data');
+                stockData = await response.json();
+                
+                document.getElementById('total-count').textContent = stockData.length;
+                document.getElementById('update-time').textContent = new Date().toLocaleTimeString('zh-TW');
+                
+                sortData(currentSort.column);
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="8" class="loading"><p style="color: #ff4757;">載入失敗: ${error.message}</p></td></tr>`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function fetchSymbols() {
+            try {
+                const response = await fetch('/api/symbols');
+                const data = await response.json();
+                symbolList = data.symbols;
+                renderSymbolList();
+            } catch (error) {
+                console.error('Error fetching symbols:', error);
+            }
+        }
+
+        function renderSymbolList() {
+            const list = document.getElementById('symbol-list');
+            list.innerHTML = symbolList.map(sym => `
+                <div class="symbol-tag">
+                    ${sym}
+                    <button class="remove-btn" onclick="removeSymbol('${sym}')">×</button>
+                </div>
+            `).join('');
+        }
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('modal-message');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            setTimeout(() => { msg.className = 'message'; }, 3000);
+        }
+
+        async function addSymbol() {
+            const input = document.getElementById('new-symbol');
+            const symbol = input.value.toUpperCase().trim();
+            
+            if (!symbol) return;
+            
+            try {
+                const response = await fetch('/api/symbols/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`已新增 ${symbol}`, 'success');
+                    input.value = '';
+                    await fetchSymbols();
+                } else {
+                    showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('新增失敗', 'error');
+            }
+        }
+
+        async function removeSymbol(symbol) {
+            try {
+                const response = await fetch('/api/symbols/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage(`已移除 ${symbol}`, 'success');
+                    await fetchSymbols();
+                } else {
+                    showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('移除失敗', 'error');
+            }
+        }
+
+        function openModal() {
+            document.getElementById('symbol-modal').classList.add('open');
+            fetchSymbols();
+        }
+
+        function closeModal() {
+            document.getElementById('symbol-modal').classList.remove('open');
+        }
+
+        async function showChart(symbol) {
+            selectedSymbol = symbol;
+            renderTable();
+            
+            const panel = document.getElementById('side-panel');
+            const mainContent = document.getElementById('main-content');
+            const chartLoading = document.getElementById('chart-loading');
+            const chartCanvas = document.getElementById('priceChart');
+            
+            panel.classList.add('open');
+            mainContent.classList.add('panel-open');
+            
+            document.getElementById('panel-symbol').textContent = symbol;
+            document.getElementById('cnbc-link').href = `https://www.cnbc.com/quotes/${symbol.toLowerCase()}?qsearchterm=${symbol.toLowerCase()}`;
+            chartLoading.style.display = 'flex';
+            chartCanvas.style.display = 'none';
+            
+            try {
+                const response = await fetch(`/api/chart/${symbol}`);
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+                
+                document.getElementById('info-reversals').textContent = data.reversals.length;
+                if (data.reversals.length > 0) {
+                    const lastReversal = data.reversals[data.reversals.length - 1];
+                    document.getElementById('info-last-reversal').textContent = lastReversal.date;
+                    document.getElementById('info-reversal-price').textContent = '$' + lastReversal.price.toFixed(2);
+                }
+                document.getElementById('info-current-price').textContent = '$' + data.prices[data.prices.length - 1].toFixed(2);
+                
+                renderChart(data);
+                chartLoading.style.display = 'none';
+                chartCanvas.style.display = 'block';
+            } catch (error) {
+                chartLoading.innerHTML = `<p style="color: #ff4757;">載入圖表失敗</p>`;
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            if (priceChart) priceChart.destroy();
+            
+            const reversalData = data.dates.map((date, i) => {
+                const reversal = data.reversals.find(r => r.date === date);
+                return reversal ? reversal.price : null;
+            });
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [
+                        {
+                            label: '收盤價',
+                            data: data.prices,
+                            borderColor: '#00d9ff',
+                            backgroundColor: 'rgba(0, 217, 255, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
+                        },
+                        {
+                            label: 'MA3',
+                            data: data.ma3,
+                            borderColor: '#ff9f43',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            borderDash: [5, 5]
+                        },
+                        {
+                            label: '反折點',
+                            data: reversalData,
+                            borderColor: '#ff4757',
+                            backgroundColor: '#ff4757',
+                            borderWidth: 0,
+                            pointRadius: 8,
+                            pointHoverRadius: 10,
+                            showLine: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(30, 42, 58, 0.95)',
+                            titleColor: '#00d9ff',
+                            bodyColor: '#e0e0e0',
+                            callbacks: {
+                                label: ctx => ctx.raw === null ? null : `${ctx.dataset.label}: $${ctx.raw.toFixed(2)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', maxTicksLimit: 6 } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: v => '$' + v.toFixed(0) } }
+                    }
+                }
+            });
+        }
+
+        function closePanel() {
+            document.getElementById('side-panel').classList.remove('open');
+            document.getElementById('main-content').classList.remove('panel-open');
+            selectedSymbol = null;
+            renderTable();
+        }
+
+        // Event listeners
+        document.querySelectorAll('th[data-column]').forEach(th => {
+            th.addEventListener('click', () => sortData(th.dataset.column));
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                closePanel();
+                closeModal();
+            }
+        });
+
+        document.getElementById('new-symbol').addEventListener('keypress', e => {
+            if (e.key === 'Enter') addSymbol();
+        });
+
+        document.getElementById('symbol-modal').addEventListener('click', e => {
+            if (e.target.id === 'symbol-modal') closeModal();
+        });
+
+        // Initial load
+        fetchData();
+    </script>
+</body>
+</html>
