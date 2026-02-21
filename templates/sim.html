@@ -205,7 +205,7 @@
             </div>
             <div class="form-group">
                 <label>日期</label>
-                <input type="text" id="input-date" placeholder="YYMMDD" maxlength="6" style="width: 80px;">
+                <input type="text" id="input-date" placeholder="Feb22" maxlength="5" style="width: 70px;">
             </div>
             <button class="add-btn" onclick="addPosition()">新增</button>
         </div>
@@ -240,10 +240,10 @@
         
         function getTodayYYMMDD() {
             const d = new Date();
-            const yy = String(d.getFullYear()).slice(-2);
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const mmm = months[d.getMonth()];
             const dd = String(d.getDate()).padStart(2, '0');
-            return yy + mm + dd;
+            return mmm + dd;
         }
         
         // Set default date on page load
