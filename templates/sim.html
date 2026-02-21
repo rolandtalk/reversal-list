@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIM - 投資組合模擬</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .back-btn {
+            background: linear-gradient(135deg, #00d9ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        
+        .back-btn:hover { opacity: 0.9; }
+        
+        .summary {
+            background: rgba(0, 217, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .total-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .total-gain {
+            font-size: 1.2rem;
+            margin-top: 5px;
+        }
+        
+        .positive { color: #00ff88; }
+        .negative { color: #ff4757; }
+        
+        .add-form {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .form-group label {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        
+        .form-group input {
+            padding: 10px 12px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1rem;
+            width: 120px;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+        
+        .add-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            border-radius: 6px;
+            color: #000;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .add-btn:hover { opacity: 0.9; }
+        
+        .table-container {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
+        
+        th {
+            background: rgba(0, 217, 255, 0.1);
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: #00d9ff;
+            font-size: 0.85rem;
+        }
+        
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.9rem;
+        }
+        
+        tr:hover td { background: rgba(0, 217, 255, 0.05); }
+        
+        .sym-cell {
+            font-weight: 700;
+            color: #00d9ff;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        
+        .delete-btn {
+            background: none;
+            border: none;
+            color: #ff4757;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        
+        .delete-btn:hover { color: #ff6b7a; }
+        
+        .loading { text-align: center; padding: 40px; color: #888; }
+        
+        .empty-msg {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>SIM - 投資組合模擬</h1>
+            <a href="/" class="back-btn">返回主頁</a>
+        </header>
+        
+        <div class="summary">
+            <div class="total-value" id="total-value">$0.00</div>
+            <div class="total-gain" id="total-gain">
+                <span id="gain-amount">$0.00</span>
+                <span id="gain-percent">(0.00%)</span>
+            </div>
+        </div>
+        
+        <div class="add-form">
+            <div class="form-group">
+                <label>股票代碼</label>
+                <input type="text" id="input-sym" placeholder="AAPL" style="width: 100px;">
+            </div>
+            <div class="form-group">
+                <label>股數</label>
+                <input type="number" id="input-shares" placeholder="100" style="width: 80px;">
+            </div>
+            <div class="form-group">
+                <label>成本價</label>
+                <input type="number" id="input-cost" placeholder="150.00" step="0.01" style="width: 100px;">
+            </div>
+            <button class="add-btn" onclick="addPosition()">新增</button>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sym</th>
+                        <th>Shares</th>
+                        <th>Cost</th>
+                        <th>Price</th>
+                        <th>Change %</th>
+                        <th>Value</th>
+                        <th>Gain</th>
+                        <th>Gain %</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr><td colspan="9" class="empty-msg">尚無持倉，請新增股票</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let positions = JSON.parse(localStorage.getItem('sim_positions') || '[]');
+        
+        async function fetchPrice(symbol) {
+            try {
+                const response = await fetch(`/api/sim/price/${symbol}`);
+                const data = await response.json();
+                return data;
+            } catch (e) {
+                return null;
+            }
+        }
+        
+        async function addPosition() {
+            const sym = document.getElementById('input-sym').value.toUpperCase().trim();
+            const shares = parseFloat(document.getElementById('input-shares').value);
+            const cost = parseFloat(document.getElementById('input-cost').value);
+            
+            if (!sym || !shares || !cost) {
+                alert('請填寫所有欄位');
+                return;
+            }
+            
+            // Check if already exists
+            const exists = positions.find(p => p.sym === sym);
+            if (exists) {
+                alert(`${sym} 已存在`);
+                return;
+            }
+            
+            positions.push({ sym, shares, cost });
+            savePositions();
+            
+document.getElementById('input-sym').value = '';
+            document.getElementById('input-shares').value = '';
+            document.getElementById('input-cost').value = '';
+            
+            await renderTable();
+        }
+        
+        function removePosition(sym) {
+            positions = positions.filter(p => p.sym !== sym);
+            savePositions();
+            renderTable();
+        }
+        
+        function savePositions() {
+            localStorage.setItem('sim_positions', JSON.stringify(positions));
+        }
+        
+        function formatNumber(num, decimals = 2) {
+            return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+        }
+        
+        async function renderTable() {
+            const tbody = document.getElementById('table-body');
+            
+            if (positions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-msg">尚無持倉，請新增股票</td></tr>';
+                document.getElementById('total-value').textContent = '$0.00';
+                document.getElementById('gain-amount').textContent = '$0.00';
+                document.getElementById('gain-percent').textContent = '(0.00%)';
+                return;
+            }
+            
+            tbody.innerHTML = '<tr><td colspan="9" class="loading">載入中...</td></tr>';
+            
+            let totalValue = 0;
+            let totalCost = 0;
+            let rows = [];
+            
+            for (const pos of positions) {
+                const priceData = await fetchPrice(pos.sym);
+                
+                if (priceData && priceData.price) {
+                    const price = priceData.price;
+                    const change = priceData.change_percent || 0;
+                    const value = price * pos.shares;
+                    const costTotal = pos.cost * pos.shares;
+                    const gain = value - costTotal;
+                    const gainPercent = ((price - pos.cost) / pos.cost) * 100;
+                    
+                    totalValue += value;
+                    totalCost += costTotal;
+                    
+                    const changeClass = change >= 0 ? 'positive' : 'negative';
+                    const gainClass = gain >= 0 ? 'positive' : 'negative';
+                    
+                    rows.push(`
+                        <tr>
+                            <td class="sym-cell">${pos.sym}</td>
+                            <td>${pos.shares}</td>
+                            <td>$${formatNumber(pos.cost)}</td>
+                            <td>$${formatNumber(price)}</td>
+                            <td class="${changeClass}">${change >= 0 ? '+' : ''}${formatNumber(change)}%</td>
+                            <td>$${formatNumber(value)}</td>
+                            <td class="${gainClass}">${gain >= 0 ? '+' : ''}$${formatNumber(gain)}</td>
+                            <td class="${gainClass}">${gainPercent >= 0 ? '+' : ''}${formatNumber(gainPercent)}%</td>
+                            <td><button class="delete-btn" onclick="removePosition('${pos.sym}')">×</button></td>
+                        </tr>
+                    `);
+                } else {
+                    rows.push(`
+                        <tr>
+                            <td class="sym-cell">${pos.sym}</td>
+                            <td>${pos.shares}</td>
+                            <td>$${formatNumber(pos.cost)}</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td><button class="delete-btn" onclick="removePosition('${pos.sym}')">×</button></td>
+                        </tr>
+                    `);
+                }
+            }
+            
+            tbody.innerHTML = rows.join('');
+            
+            const totalGain = totalValue - totalCost;
+            const totalGainPercent = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
+            const gainClass = totalGain >= 0 ? 'positive' : 'negative';
+            
+            document.getElementById('total-value').textContent = '$' + formatNumber(totalValue);
+            document.getElementById('gain-amount').className = gainClass;
+            document.getElementById('gain-amount').textContent = (totalGain >= 0 ? '+' : '') + '$' + formatNumber(totalGain);
+            document.getElementById('gain-percent').className = gainClass;
+            document.getElementById('gain-percent').textContent = ` (${totalGainPercent >= 0 ? '+' : ''}${formatNumber(totalGainPercent)}%)`;
+        }
+        
+        // Initial load
+        renderTable();
+    </script>
+</body>
+</html>

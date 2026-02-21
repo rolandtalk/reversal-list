@@ -344,6 +344,42 @@ def get_data():
     return response
 
 
+@app.route('/sim')
+def sim_page():
+    """Render SIM portfolio page"""
+    return render_template('sim.html')
+
+
+@app.route('/api/sim/price/<symbol>')
+def get_sim_price(symbol):
+    """Get current price and change percent for SIM"""
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        hist = ticker.history(period="2d")
+        
+        if hist.empty or len(hist) < 1:
+            return jsonify({"error": "No data"}), 404
+        
+        current_price = float(hist['Close'].iloc[-1])
+        
+        # Calculate change percent from previous close
+        if len(hist) >= 2:
+            prev_close = float(hist['Close'].iloc[-2])
+            change_percent = ((current_price - prev_close) / prev_close) * 100
+        else:
+            change_percent = 0
+        
+        return jsonify({
+            "symbol": symbol.upper(),
+            "price": round(current_price, 2),
+            "change_percent": round(change_percent, 2)
+        })
+        
+    except Exception as e:
+        print(f"Error getting SIM price for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     print(f"Starting server with {len(load_symbols())} symbols...")
     port = int(os.environ.get('PORT', 5000))

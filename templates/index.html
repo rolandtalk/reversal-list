@@ -52,7 +52,20 @@
         
         .btn-group { display: flex; gap: 10px; align-items: center; }
         
-        .refresh-btn, .manage-btn {
+        .refresh-btn {
+            background: linear-gradient(135deg, #00d9ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .manage-btn {
             background: linear-gradient(135deg, #00d9ff, #0099cc);
             border: none;
             color: white;
@@ -71,7 +84,30 @@
             background: linear-gradient(135deg, #9b59b6, #8e44ad);
         }
         
-        .refresh-btn:hover, .manage-btn:hover {
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(0, 217, 255, 0.3);
+        }
+        
+        .sim-btn {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .sim-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
+        }
+        
+        .manage-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(0, 217, 255, 0.3);
         }
@@ -413,13 +449,13 @@
             
             <div class="controls">
                 <div class="btn-group">
-                    <button class="refresh-btn" onclick="fetchData()">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button class="refresh-btn" onclick="fetchData()" title="重新整理">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M23 4v6h-6M1 20v-6h6"/>
                             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                         </svg>
-                        重新整理
                     </button>
+                    <a href="/sim" class="sim-btn">SIM</a>
                     <button class="manage-btn" onclick="openModal()">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 5v14M5 12h14"/>
