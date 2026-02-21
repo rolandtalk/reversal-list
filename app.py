@@ -10,18 +10,23 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
 import os
 import warnings
 warnings.filterwarnings('ignore')
 
+# Supabase
+from supabase import create_client, Client
+
 app = Flask(__name__)
 CORS(app)
 
-# File to persist custom symbols
-SYMBOLS_FILE = os.path.join(os.path.dirname(__file__), 'symbols.json')
+# Supabase configuration
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://pggshikvapdnukpzoznk.supabase.co')
+SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'sb_publishable_BgGQTZmkECmAwRAOM6Bmig_uTafg82R')
 
-# Default symbol list
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Default symbol list (used for initial setup)
 DEFAULT_SYMBOLS = [
     "AAPL", "ABBV", "ACHR", "ADBE", "ADSK", "AFRM", "AIG", "ALB", "AMAT", "AMD", "AMZN",
     "ANET", "APP", "ARKG", "ARKK", "ARKX", "ASML", "ASTS", "AVAV", "AVGO", "BA", "BABA", "BAX",
@@ -40,19 +45,45 @@ DEFAULT_SYMBOLS = [
 ]
 
 def load_symbols():
-    """Load symbols from file or return defaults"""
-    if os.path.exists(SYMBOLS_FILE):
-        try:
-            with open(SYMBOLS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
-    return DEFAULT_SYMBOLS.copy()
+    """Load symbols from Supabase"""
+    try:
+        response = supabase.table('symbols').select('symbol').execute()
+        if response.data:
+            return [row['symbol'] for row in response.data]
+        else:
+            # Initialize with default symbols if table is empty
+            init_default_symbols()
+            return DEFAULT_SYMBOLS.copy()
+    except Exception as e:
+        print(f"Error loading symbols from Supabase: {e}")
+        return DEFAULT_SYMBOLS.copy()
 
-def save_symbols(symbols):
-    """Save symbols to file"""
-    with open(SYMBOLS_FILE, 'w') as f:
-        json.dump(sorted(list(set(symbols))), f)
+def init_default_symbols():
+    """Initialize database with default symbols"""
+    try:
+        for symbol in DEFAULT_SYMBOLS:
+            supabase.table('symbols').upsert({'symbol': symbol}).execute()
+        print("Initialized default symbols in Supabase")
+    except Exception as e:
+        print(f"Error initializing symbols: {e}")
+
+def add_symbol_to_db(symbol):
+    """Add a symbol to Supabase"""
+    try:
+        supabase.table('symbols').insert({'symbol': symbol}).execute()
+        return True
+    except Exception as e:
+        print(f"Error adding symbol: {e}")
+        return False
+
+def remove_symbol_from_db(symbol):
+    """Remove a symbol from Supabase"""
+    try:
+        supabase.table('symbols').delete().eq('symbol', symbol).execute()
+        return True
+    except Exception as e:
+        print(f"Error removing symbol: {e}")
+        return False
 
 def calculate_rsi(prices, period=14):
     """Calculate RSI (Relative Strength Index)"""
@@ -171,7 +202,7 @@ def index():
 def get_symbols():
     """Get current symbol list"""
     symbols = load_symbols()
-    return jsonify({'symbols': symbols, 'count': len(symbols)})
+    return jsonify({'symbols': sorted(symbols), 'count': len(symbols)})
 
 
 @app.route('/api/symbols/add', methods=['POST'])
@@ -196,10 +227,10 @@ def add_symbol():
     if symbol in symbols:
         return jsonify({'error': f'{symbol} already exists'}), 400
     
-    symbols.append(symbol)
-    save_symbols(symbols)
-    
-    return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols)})
+    if add_symbol_to_db(symbol):
+        return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols) + 1})
+    else:
+        return jsonify({'error': 'Failed to add symbol'}), 500
 
 
 @app.route('/api/symbols/remove', methods=['POST'])
@@ -215,10 +246,10 @@ def remove_symbol():
     if symbol not in symbols:
         return jsonify({'error': f'{symbol} not found'}), 404
     
-    symbols.remove(symbol)
-    save_symbols(symbols)
-    
-    return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols)})
+    if remove_symbol_from_db(symbol):
+        return jsonify({'success': True, 'symbol': symbol, 'count': len(symbols) - 1})
+    else:
+        return jsonify({'error': 'Failed to remove symbol'}), 500
 
 
 @app.route('/api/chart/<symbol>')
@@ -234,7 +265,7 @@ def get_chart_data(symbol):
         close_prices = df['Close'].copy()
         ma3 = close_prices.rolling(window=3).mean()
         
-        work_df = pd.DataFrame({
+        work_df =pd.DataFrame({
             'Close': close_prices,
             'MA3': ma3
         })
@@ -297,9 +328,9 @@ def get_data():
                     result = future.result(timeout=30)
                     if result:
                         results.append(result)
-                        print(f"✓ {sym}")
+                        print(f"O {sym}")
                 except Exception as e:
-                    print(f"✗ {sym}: {e}")
+                    print(f"X {sym}: {e}")
         
         results.sort(key=lambda x: x['dg'])
         print(f"Returning {len(results)} results")
