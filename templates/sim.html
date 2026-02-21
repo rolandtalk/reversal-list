@@ -405,9 +405,9 @@
             const totalGainPercent = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
             const gainClass = totalGain >= 0 ? 'positive' : 'negative';
             
-            document.getElementById('total-value').textContent = '$' + formatNumber(totalValue);
+            document.getElementById('total-value').textContent = '$' + formatNumber(totalValue, 0);
             document.getElementById('gain-amount').className = gainClass;
-            document.getElementById('gain-amount').textContent = (totalGain >= 0 ? '+' : '') + '$' + formatNumber(totalGain);
+            document.getElementById('gain-amount').textContent = (totalGain >= 0 ? '+' : '') + '$' + formatNumber(totalGain, 0);
             document.getElementById('gain-percent').className = gainClass;
             document.getElementById('gain-percent').textContent = ` (${totalGainPercent >= 0 ? '+' : ''}${formatNumber(totalGainPercent)}%)`;
         }
