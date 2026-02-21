@@ -16,9 +16,14 @@ warnings.filterwarnings('ignore')
 
 # Supabase
 from supabase import create_client, Client
+import time
 
 app = Flask(__name__)
 CORS(app)
+
+# Simple cache
+DATA_CACHE = {'data': None, 'timestamp': 0}
+CACHE_TTL = 300  # 5 minutes
 
 # Supabase configuration
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://pggshikvapdnukpzoznk.supabase.co')
@@ -313,35 +318,43 @@ def get_chart_data(symbol):
 
 @app.route('/api/data')
 def get_data():
-    """Fetch all symbol data concurrently"""
+    """Fetch all symbol data concurrently with caching"""
+    global DATA_CACHE
+    
+    # Check cache
+    now = time.time()
+    if DATA_CACHE['data'] and (now - DATA_CACHE['timestamp']) < CACHE_TTL:
+        print("Returning cached data")
+        return jsonify(DATA_CACHE['data'])
+    
     print("API /api/data called - starting data fetch...")
     symbols = load_symbols()
     results = []
     
     try:
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=20) as executor:
             future_to_symbol = {executor.submit(calculate_reversal_data, sym): sym for sym in symbols}
             
             for future in as_completed(future_to_symbol):
                 sym = future_to_symbol[future]
                 try:
-                    result = future.result(timeout=30)
+                    result = future.result(timeout=15)
                     if result:
                         results.append(result)
-                        print(f"O {sym}")
                 except Exception as e:
                     print(f"X {sym}: {e}")
         
         results.sort(key=lambda x: x['dg'])
         print(f"Returning {len(results)} results")
         
+        # Update cache
+        DATA_CACHE = {'data': results, 'timestamp': now}
+        
     except Exception as e:
         print(f"Error in get_data: {e}")
         return jsonify({"error": str(e)}), 500
     
-    response = jsonify(results)
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    return response
+    return jsonify(results)
 
 
 @app.route('/sim')
