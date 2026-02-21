@@ -99,6 +99,84 @@ def calculate_rsi(prices, period=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+def batch_calculate_all(symbols):
+    """Batch download and calculate all symbols at once - MUCH faster"""
+    try:
+        # Batch download all symbols at once
+        data = yf.download(symbols, period="40d", group_by='ticker', progress=False, threads=True)
+        results = []
+        
+        for symbol in symbols:
+            try:
+                if len(symbols) == 1:
+                    df = data
+                else:
+                    df = data[symbol] if symbol in data.columns.get_level_values(0) else None
+                
+                if df is None or df.empty or len(df) < 20:
+                    continue
+                
+                close = df['Close'].dropna()
+                if len(close) < 20:
+                    continue
+                
+                ma3 = close.rolling(3).mean()
+                rsi = calculate_rsi(close, 14)
+                
+                work_df = pd.DataFrame({'Close': close, 'MA3': ma3}).dropna()
+                if len(work_df) < 5:
+                    continue
+                
+                # Find reversal points
+                work_df['Below'] = work_df['Close'] < work_df['MA3']
+                segments = []
+                in_seg = False
+                start = 0
+                for i in range(len(work_df)):
+                    if work_df['Below'].iloc[i] and not in_seg:
+                        in_seg = True
+                        start = i
+                    elif not work_df['Below'].iloc[i] and in_seg:
+                        in_seg = False
+                        segments.append((start, i-1))
+                if in_seg:
+                    segments.append((start, len(work_df)-1))
+                
+                if not segments:
+                    continue
+                
+                rev_points = [work_df.iloc[s:e+1]['Close'].idxmin() for s, e in segments]
+                last_rev = rev_points[-1]
+                last_rev_price = float(work_df.loc[last_rev, 'Close'])
+                curr_price = float(work_df['Close'].iloc[-1])
+                curr_date = work_df.index[-1]
+                
+                dg = (curr_date - last_rev).days
+                gg = ((curr_price - last_rev_price) / last_rev_price) * 100
+                
+                def gain(d):
+                    if len(work_df) > d:
+                        return ((curr_price - float(work_df['Close'].iloc[-d-1])) / float(work_df['Close'].iloc[-d-1])) * 100
+                    return 0.0
+                
+                results.append({
+                    'sym': symbol,
+                    'dg': dg,
+                    'gg': round(gg, 2),
+                    'rsi': round(float(rsi.iloc[-1]), 1) if not pd.isna(rsi.iloc[-1]) else None,
+                    'd1': round(gain(1), 2),
+                    'd3': round(gain(3), 2),
+                    'd5': round(gain(5), 2),
+                    'd20': round(gain(20), 2)
+                })
+            except Exception as e:
+                continue
+        
+        return results
+    except Exception as e:
+        print(f"Batch download error: {e}")
+        return []
+
 def calculate_reversal_data(symbol):
     """Calculate reversal point data for a single symbol"""
     try:
@@ -318,7 +396,7 @@ def get_chart_data(symbol):
 
 @app.route('/api/data')
 def get_data():
-    """Fetch all symbol data concurrently with caching"""
+    """Fetch all symbol data with batch download"""
     global DATA_CACHE
     
     # Check cache
@@ -327,34 +405,20 @@ def get_data():
         print("Returning cached data")
         return jsonify(DATA_CACHE['data'])
     
-    print("API /api/data called - starting data fetch...")
+    print("Fetching data with batch download...")
     symbols = load_symbols()
-    results = []
     
     try:
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            future_to_symbol = {executor.submit(calculate_reversal_data, sym): sym for sym in symbols}
-            
-            for future in as_completed(future_to_symbol):
-                sym = future_to_symbol[future]
-                try:
-                    result = future.result(timeout=15)
-                    if result:
-                        results.append(result)
-                except Exception as e:
-                    print(f"X {sym}: {e}")
-        
+        results = batch_calculate_all(symbols)
         results.sort(key=lambda x: x['dg'])
-        print(f"Returning {len(results)} results")
+        print(f"Got {len(results)} results")
         
-        # Update cache
         DATA_CACHE = {'data': results, 'timestamp': now}
+        return jsonify(results)
         
     except Exception as e:
-        print(f"Error in get_data: {e}")
+        print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
-    
-    return jsonify(results)
 
 
 @app.route('/sim')
