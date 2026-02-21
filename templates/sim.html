@@ -246,6 +246,20 @@
             return mmm + dd;
         }
         
+        function formatDateDisplay(dateStr) {
+            if (!dateStr) return '-';
+            // If already MMMDD format
+            if (dateStr.match(/^[A-Za-z]{3}\d{2}$/)) return dateStr;
+            // Convert YYMMDD to MMMDD
+            if (dateStr.length === 6 && /^\d{6}$/.test(dateStr)) {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const mm = parseInt(dateStr.slice(2, 4), 10);
+                const dd = dateStr.slice(4, 6);
+                return months[mm - 1] + dd;
+            }
+            return dateStr;
+        }
+        
         // Set default date on page load
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('input-date').value = getTodayYYMMDD();
@@ -408,7 +422,7 @@
                     const gainClass = item.gain >= 0 ? 'positive' : 'negative';
                     rows.push(`
                         <tr>
-                            <td>${item.date || '-'}</td>
+                            <td>${formatDateDisplay(item.date)}</td>
                             <td class="sym-cell">${item.sym}</td>
                             <td>${item.shares}</td>
                             <td>$${formatNumber(item.cost)}</td>
@@ -423,7 +437,7 @@
                 } else {
                     rows.push(`
                         <tr>
-                            <td>${item.date || '-'}</td>
+                            <td>${formatDateDisplay(item.date)}</td>
                             <td class="sym-cell">${item.sym}</td>
                             <td>${item.shares}</td>
                             <td>$${formatNumber(item.cost)}</td>
