@@ -452,6 +452,7 @@
         .legend-item { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; font-size: 0.75rem; color: #aaa; }
         .legend-color { width: 20px; height: 3px; border-radius: 2px; }
         .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .legend-triangle { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid #ff4757; }
         
         @media (max-width: 900px) {
             .side-panel { width: 100%; right: -100%; }
@@ -552,7 +553,7 @@
             <div style="margin-bottom: 6px;">
                 <div class="legend-item"><div class="legend-color" style="background: #00d9ff;"></div><span>收盤價</span></div>
                 <div class="legend-item"><div class="legend-color" style="background: #ff9f43;"></div><span>MA3</span></div>
-                <div class="legend-item"><div class="legend-dot" style="background: #ff4757;"></div><span>反折點</span></div>
+                <div class="legend-item"><div class="legend-triangle"></div><span>反折點</span></div>
             </div>
             
             <div class="stock-info" id="stock-info">
