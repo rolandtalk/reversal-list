@@ -457,6 +457,52 @@ def get_sim_price(symbol):
         return jsonify({"error": str(e)}), 500
 
 
+# SIM Portfolio API endpoints
+@app.route('/api/sim/positions', methods=['GET'])
+def get_sim_positions():
+    """Get all SIM positions from Supabase"""
+    try:
+        response = supabase.table('sim_positions').select('*').execute()
+        return jsonify(response.data if response.data else [])
+    except Exception as e:
+        print(f"Error getting SIM positions: {e}")
+        return jsonify([])
+
+
+@app.route('/api/sim/positions', methods=['POST'])
+def add_sim_position():
+    """Add or update a SIM position"""
+    data = request.get_json()
+    symbol = data.get('symbol', '').upper().strip()
+    shares = data.get('shares')
+    cost = data.get('cost')
+    
+    if not symbol or shares is None or cost is None:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        supabase.table('sim_positions').upsert({
+            'symbol': symbol,
+            'shares': float(shares),
+            'cost': float(cost)
+        }).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error adding SIM position: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sim/positions/<symbol>', methods=['DELETE'])
+def delete_sim_position(symbol):
+    """Delete a SIM position"""
+    try:
+        supabase.table('sim_positions').delete().eq('symbol', symbol.upper()).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error deleting SIM position: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     print(f"Starting server with {len(load_symbols())} symbols...")
     port = int(os.environ.get('PORT', 5000))

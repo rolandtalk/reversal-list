@@ -218,7 +218,18 @@
     </div>
 
     <script>
-        let positions = JSON.parse(localStorage.getItem('sim_positions') || '[]');
+        let positions = [];
+        
+        async function loadPositions() {
+            try {
+                const response = await fetch('/api/sim/positions');
+                const data = await response.json();
+                positions = data.map(p => ({ sym: p.symbol, shares: p.shares, cost: p.cost }));
+            } catch (e) {
+                console.error('Error loading positions:', e);
+                positions = [];
+            }
+        }
         
         async function fetchPrice(symbol) {
             try {
@@ -240,31 +251,39 @@
                 return;
             }
             
-            // Check if already exists
             const exists = positions.find(p => p.sym === sym);
             if (exists) {
                 alert(`${sym} 已存在`);
                 return;
             }
             
-            positions.push({ sym, shares, cost });
-            savePositions();
+            try {
+                await fetch('/api/sim/positions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ symbol: sym, shares, cost })
+                });
+                positions.push({ sym, shares, cost });
+            } catch (e) {
+                alert('新增失敗');
+                return;
+            }
             
-document.getElementById('input-sym').value = '';
+            document.getElementById('input-sym').value = '';
             document.getElementById('input-shares').value = '';
             document.getElementById('input-cost').value = '';
             
             await renderTable();
         }
         
-        function removePosition(sym) {
-            positions = positions.filter(p => p.sym !== sym);
-            savePositions();
-            renderTable();
-        }
-        
-        function savePositions() {
-            localStorage.setItem('sim_positions', JSON.stringify(positions));
+        async function removePosition(sym) {
+            try {
+                await fetch(`/api/sim/positions/${sym}`, { method: 'DELETE' });
+                positions = positions.filter(p => p.sym !== sym);
+                await renderTable();
+            } catch (e) {
+                alert('刪除失敗');
+            }
         }
         
         function formatNumber(num, decimals = 2) {
@@ -349,7 +368,10 @@ document.getElementById('input-sym').value = '';
         }
         
         // Initial load
-        renderTable();
+        (async () => {
+            await loadPositions();
+            await renderTable();
+        })();
     </script>
 </body>
 </html>
