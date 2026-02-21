@@ -131,6 +131,17 @@
             font-size: 0.85rem;
         }
         
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        th.sortable:hover { background: rgba(0, 217, 255, 0.2); }
+        th.sorted { color: #00ff88; }
+        th .sort-icon { opacity: 0.4; margin-left: 4px; }
+        th.sorted .sort-icon { opacity: 1; }
+        th.sorted.asc .sort-icon { transform: rotate(180deg); display: inline-block; }
+        
         td {
             padding: 12px 10px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -203,15 +214,15 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Sym</th>
+                        <th class="sortable" data-col="date" onclick="sortTable('date')">Date<span class="sort-icon">▼</span></th>
+                        <th class="sortable" data-col="sym" onclick="sortTable('sym')">Sym<span class="sort-icon">▼</span></th>
                         <th>Shares</th>
                         <th>Cost</th>
                         <th>Price</th>
-                        <th>Change %</th>
-                        <th>Value</th>
-                        <th>Gain</th>
-                        <th>Gain %</th>
+                        <th class="sortable" data-col="change" onclick="sortTable('change')">Change %<span class="sort-icon">▼</span></th>
+                        <th class="sortable" data-col="value" onclick="sortTable('value')">Value<span class="sort-icon">▼</span></th>
+                        <th class="sortable" data-col="gain" onclick="sortTable('gain')">Gain<span class="sort-icon">▼</span></th>
+                        <th class="sortable" data-col="gainPct" onclick="sortTable('gainPct')">Gain %<span class="sort-icon">▼</span></th>
                         <th></th>
                     </tr>
                 </thead>
@@ -224,6 +235,8 @@
 
     <script>
         let positions = [];
+        let displayData = [];
+        let currentSort = { col: 'date', dir: 'desc' };
         
         function getTodayYYMMDD() {
             const d = new Date();
@@ -237,6 +250,33 @@
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('input-date').value = getTodayYYMMDD();
         });
+        
+        function sortTable(col) {
+            if (currentSort.col === col) {
+                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.col = col;
+                currentSort.dir = 'desc';
+            }
+            
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sorted', 'asc', 'desc');
+            });
+            const th = document.querySelector(`th[data-col="${col}"]`);
+            th.classList.add('sorted', currentSort.dir);
+            
+            displayData.sort((a, b) => {
+                let va = a[col], vb = b[col];
+                if (col === 'sym' || col === 'date') {
+                    return currentSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                }
+                va = parseFloat(va) || 0;
+                vb = parseFloat(vb) || 0;
+                return currentSort.dir === 'asc' ? va - vb : vb - va;
+            });
+            
+            renderRows();
+        }
         
         async function loadPositions() {
             try {
@@ -325,58 +365,27 @@
             
             let totalValue = 0;
             let totalCost = 0;
-            let rows = [];
+            displayData = [];
             
             for (const pos of positions) {
                 const priceData = await fetchPrice(pos.sym);
+                const item = { ...pos, price: 0, change: 0, value: 0, gain: 0, gainPct: 0, valid: false };
                 
                 if (priceData && priceData.price) {
-                    const price = priceData.price;
-                    const change = priceData.change_percent || 0;
-                    const value = price * pos.shares;
+                    item.price = priceData.price;
+                    item.change = priceData.change_percent || 0;
+                    item.value = item.price * pos.shares;
                     const costTotal = pos.cost * pos.shares;
-                    const gain = value - costTotal;
-                    const gainPercent = ((price - pos.cost) / pos.cost) * 100;
-                    
-                    totalValue += value;
+                    item.gain = item.value - costTotal;
+                    item.gainPct = ((item.price - pos.cost) / pos.cost) * 100;
+                    item.valid = true;
+                    totalValue += item.value;
                     totalCost += costTotal;
-                    
-                    const changeClass = change >= 0 ? 'positive' : 'negative';
-                    const gainClass = gain >= 0 ? 'positive' : 'negative';
-                    
-                    rows.push(`
-                        <tr>
-                            <td>${pos.date || '-'}</td>
-                            <td class="sym-cell">${pos.sym}</td>
-                            <td>${pos.shares}</td>
-                            <td>$${formatNumber(pos.cost)}</td>
-                            <td>$${formatNumber(price)}</td>
-                            <td class="${changeClass}">${change >= 0 ? '+' : ''}${formatNumber(change)}%</td>
-                            <td>$${formatNumber(value)}</td>
-                            <td class="${gainClass}">${gain >= 0 ? '+' : ''}$${formatNumber(gain)}</td>
-                            <td class="${gainClass}">${gainPercent >= 0 ? '+' : ''}${formatNumber(gainPercent)}%</td>
-                            <td><button class="delete-btn" onclick="removePosition('${pos.sym}')">×</button></td>
-                        </tr>
-                    `);
-                } else {
-                    rows.push(`
-                        <tr>
-                            <td>${pos.date || '-'}</td>
-                            <td class="sym-cell">${pos.sym}</td>
-                            <td>${pos.shares}</td>
-                            <td>$${formatNumber(pos.cost)}</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td><button class="delete-btn" onclick="removePosition('${pos.sym}')">×</button></td>
-                        </tr>
-                    `);
                 }
+                displayData.push(item);
             }
             
-            tbody.innerHTML = rows.join('');
+            sortTable(currentSort.col);
             
             const totalGain = totalValue - totalCost;
             const totalGainPercent = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
@@ -387,6 +396,44 @@
             document.getElementById('gain-amount').textContent = (totalGain >= 0 ? '+' : '') + '$' + formatNumber(totalGain);
             document.getElementById('gain-percent').className = gainClass;
             document.getElementById('gain-percent').textContent = ` (${totalGainPercent >= 0 ? '+' : ''}${formatNumber(totalGainPercent)}%)`;
+        }
+        
+        function renderRows() {
+            const tbody = document.getElementById('table-body');
+            let rows = [];
+            
+            for (const item of displayData) {
+                if (item.valid) {
+                    const changeClass = item.change >= 0 ? 'positive' : 'negative';
+                    const gainClass = item.gain >= 0 ? 'positive' : 'negative';
+                    rows.push(`
+                        <tr>
+                            <td>${item.date || '-'}</td>
+                            <td class="sym-cell">${item.sym}</td>
+                            <td>${item.shares}</td>
+                            <td>$${formatNumber(item.cost)}</td>
+                            <td>$${formatNumber(item.price)}</td>
+                            <td class="${changeClass}">${item.change >= 0 ? '+' : ''}${formatNumber(item.change)}%</td>
+                            <td>$${formatNumber(item.value)}</td>
+                            <td class="${gainClass}">${item.gain >= 0 ? '+' : ''}$${formatNumber(item.gain)}</td>
+                            <td class="${gainClass}">${item.gainPct >= 0 ? '+' : ''}${formatNumber(item.gainPct)}%</td>
+                            <td><button class="delete-btn" onclick="removePosition('${item.sym}')">×</button></td>
+                        </tr>
+                    `);
+                } else {
+                    rows.push(`
+                        <tr>
+                            <td>${item.date || '-'}</td>
+                            <td class="sym-cell">${item.sym}</td>
+                            <td>${item.shares}</td>
+                            <td>$${formatNumber(item.cost)}</td>
+                            <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+                            <td><button class="delete-btn" onclick="removePosition('${item.sym}')">×</button></td>
+                        </tr>
+                    `);
+                }
+            }
+            tbody.innerHTML = rows.join('');
         }
         
         // Initial load
