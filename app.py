@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 from supabase import create_client, Client
 import time
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
 # Simple cache
