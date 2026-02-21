@@ -476,6 +476,7 @@ def add_sim_position():
     symbol = data.get('symbol', '').upper().strip()
     shares = data.get('shares')
     cost = data.get('cost')
+    buy_date = data.get('buy_date', '')
     
     if not symbol or shares is None or cost is None:
         return jsonify({'error': 'Missing required fields'}), 400
@@ -484,7 +485,8 @@ def add_sim_position():
         supabase.table('sim_positions').upsert({
             'symbol': symbol,
             'shares': float(shares),
-            'cost': float(cost)
+            'cost': float(cost),
+            'buy_date': buy_date
         }).execute()
         return jsonify({'success': True})
     except Exception as e:
