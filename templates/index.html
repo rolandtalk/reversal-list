@@ -7,6 +7,7 @@
     <title>Reversal Alert</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -933,34 +934,56 @@
             if (e.target.id === 'symbol-modal') closeModal();
         });
         
-        // Export to Excel function
+        // Export to Excel function (using SheetJS for proper Excel format)
         function exportToExcel() {
             if (stockData.length === 0) {
                 alert('No data to export');
                 return;
             }
             
-            let csv = 'Symbol,DG,GG %,RSI,1D %,3D %,5D %,20D %\n';
+            // Prepare data with proper formatting
+            const formatVal = (val) => {
+                if (val === null || val === undefined) return 0;
+                return parseFloat(val) / 100; // Convert percentage to decimal for Excel
+            };
+            
+            const wsData = [
+                ['Symbol', 'DG', 'GG %', 'RSI', '1D %', '3D %', '5D %', '20D %'] // Header
+            ];
             
             for (const row of stockData) {
-                const formatVal = (val, isPct = true) => {
-                    if (val === null || val === undefined) return '-';
-                    const num = parseFloat(val);
-                    // Output as pure numbers - no + prefix, no % suffix
-                    // This ensures mobile Excel recognizes them as numbers
-                    return num.toFixed(1);
-                };
-                
-                csv += `${row.sym},${row.dg},${formatVal(row.gg)},${formatVal(row.rsi, false)},${formatVal(row.d1)},${formatVal(row.d3)},${formatVal(row.d5)},${formatVal(row.d20)}\n`;
+                wsData.push([
+                    row.sym,
+                    row.dg,
+                    formatVal(row.gg),           // GG as percentage
+                    row.rsi ? parseFloat(row.rsi) : 0,  // RSI as number
+                    formatVal(row.d1),           // 1D as percentage
+                    formatVal(row.d3),           // 3D as percentage
+                    formatVal(row.d5),           // 5D as percentage
+                    formatVal(row.d20)           // 20D as percentage
+                ]);
             }
             
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'Reversal_Alert_' + new Date().toISOString().slice(0,10) + '.csv';
-            a.click();
-            window.URL.revokeObjectURL(url);
+            // Create workbook and worksheet
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 8 },  // Symbol
+                { wch: 4 },  // DG
+                { wch: 8 },  // GG %
+                { wch: 6 },  // RSI
+                { wch: 8 },  // 1D %
+                { wch: 8 },  // 3D %
+                { wch: 8 },  // 5D %
+                { wch: 8 }   // 20D %
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, ws, 'Reversal Alert');
+            
+            // Generate and download Excel file
+            XLSX.writeFile(wb, 'Reversal_Alert_' + new Date().toISOString().slice(0,10) + '.xlsx');
         }
 
         // Initial load

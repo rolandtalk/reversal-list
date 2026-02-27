@@ -8,7 +8,7 @@ os.chdir('/Users/rolandtalkonmini/reversal-list')
 subprocess.run(['/usr/bin/git', 'add', '-A'])
 
 # Git commit
-result = subprocess.run(['/usr/bin/git', 'commit', '-m', 'Fix CSV export format - remove + prefix for mobile Excel number recognition'], 
+result = subprocess.run(['/usr/bin/git', 'commit', '-m', 'Export to real Excel format with % symbol using SheetJS'], 
                         capture_output=True, text=True)
 print("Commit output:", result.stdout, result.stderr)
 
