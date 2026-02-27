@@ -946,9 +946,9 @@
                 const formatVal = (val, isPct = true) => {
                     if (val === null || val === undefined) return '-';
                     const num = parseFloat(val);
-                    const prefix = num > 0 ? '+' : '';
-                    // Export as pure numbers (without %) for Excel compatibility
-                    return prefix + num.toFixed(1);
+                    // Output as pure numbers - no + prefix, no % suffix
+                    // This ensures mobile Excel recognizes them as numbers
+                    return num.toFixed(1);
                 };
                 
                 csv += `${row.sym},${row.dg},${formatVal(row.gg)},${formatVal(row.rsi, false)},${formatVal(row.d1)},${formatVal(row.d3)},${formatVal(row.d5)},${formatVal(row.d20)}\n`;
