@@ -423,12 +423,6 @@ def get_data():
 
 @app.route('/sim')
 def sim_page():
-    """Redirect to SIM RH page"""
-    return render_template('sim.html')
-
-
-@app.route('/sim')
-def sim_page():
     """Render SIM portfolio page"""
     return render_template('sim.html')
 
