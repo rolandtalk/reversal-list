@@ -484,6 +484,13 @@
                             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                         </svg>
                     </button>
+                    <button class="icon-btn" onclick="exportToExcel()" title="Export to Excel" style="background: rgba(0, 255, 136, 0.15); color: #00ff88;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                    </button>
                     <button class="manage-btn" onclick="openModal()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 5v14M5 12h14"/>
@@ -925,6 +932,36 @@
         document.getElementById('symbol-modal').addEventListener('click', e => {
             if (e.target.id === 'symbol-modal') closeModal();
         });
+        
+        // Export to Excel function
+        function exportToExcel() {
+            if (stockData.length === 0) {
+                alert('No data to export');
+                return;
+            }
+            
+            let csv = 'Symbol,DG,GG %,RSI,1D %,3D %,5D %,20D %\n';
+            
+            for (const row of stockData) {
+                const formatVal = (val, isPct = true) => {
+                    if (val === null || val === undefined) return '-';
+                    const num = parseFloat(val);
+                    const prefix = num > 0 ? '+' : '';
+                    const suffix = isPct ? '%' : '';
+                    return prefix + num.toFixed(1) + suffix;
+                };
+                
+                csv += `${row.sym},${row.dg},${formatVal(row.gg)},${formatVal(row.rsi, false)},${formatVal(row.d1)},${formatVal(row.d3)},${formatVal(row.d5)},${formatVal(row.d20)}\n`;
+            }
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Reversal_Alert_' + new Date().toISOString().slice(0,10) + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
 
         // Initial load
         fetchData();
