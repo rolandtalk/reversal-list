@@ -8,7 +8,7 @@ os.chdir('/Users/rolandtalkonmini/reversal-list')
 subprocess.run(['/usr/bin/git', 'add', '-A'])
 
 # Git commit
-result = subprocess.run(['/usr/bin/git', 'commit', '-m', 'Export to real Excel format with % symbol using SheetJS'], 
+result = subprocess.run(['/usr/bin/git', 'commit', '-m', 'Add percentage format to Excel export - GG%, 1D%, 3D%, 5D%, 20D%'], 
                         capture_output=True, text=True)
 print("Commit output:", result.stdout, result.stderr)
 

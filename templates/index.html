@@ -972,13 +972,38 @@
             ws['!cols'] = [
                 { wch: 8 },  // Symbol
                 { wch: 4 },  // DG
-                { wch: 8 },  // GG %
+                { wch: 10 }, // GG %
                 { wch: 6 },  // RSI
-                { wch: 8 },  // 1D %
-                { wch: 8 },  // 3D %
-                { wch: 8 },  // 5D %
-                { wch: 8 }   // 20D %
+                { wch: 10 }, // 1D %
+                { wch: 10 }, // 3D %
+                { wch: 10 }, // 5D %
+                { wch: 10 }  // 20D %
             ];
+            
+            // Set percentage format for columns C (GG %), E (1D %), F (3D %), G (5D %), H (20D %)
+            // Using Excel number format: 0.00% displays as percentage
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let R = range.s.r + 1; R <= range.e.r; R++) { // Skip header row
+                // Column C (GG %): index 2
+                let cellC = ws[XLSX.utils.encode_cell({r: R, c: 2})];
+                if (cellC) { cellC.z = '0.00%'; }
+                
+                // Column E (1D %): index 4
+                let cellE = ws[XLSX.utils.encode_cell({r: R, c: 4})];
+                if (cellE) { cellE.z = '0.00%'; }
+                
+                // Column F (3D %): index 5
+                let cellF = ws[XLSX.utils.encode_cell({r: R, c: 5})];
+                if (cellF) { cellF.z = '0.00%'; }
+                
+                // Column G (5D %): index 6
+                let cellG = ws[XLSX.utils.encode_cell({r: R, c: 6})];
+                if (cellG) { cellG.z = '0.00%'; }
+                
+                // Column H (20D %): index 7
+                let cellH = ws[XLSX.utils.encode_cell({r: R, c: 7})];
+                if (cellH) { cellH.z = '0.00%'; }
+            }
             
             XLSX.utils.book_append_sheet(wb, ws, 'Reversal Alert');
             
